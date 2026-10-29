@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CRUD User – Konsep PBO</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mut:#6a737d;--bd:#d9dde3;--pri:#2f5fd0;--pri-tx:#fff;--dan:#c62f3a;--ok:#1d7a46;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1d2127;--tx:#e8eaed;--mut:#9aa3ad;--bd:#343a42;--pri:#6b94f5;--pri-tx:#0c1220;--dan:#f0707a;--ok:#5cc88a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1d2127;--tx:#e8eaed;--mut:#9aa3ad;--bd:#343a42;--pri:#6b94f5;--pri-tx:#0c1220;--dan:#f0707a;--ok:#5cc88a;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--bd);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header b{margin-right:auto}
+nav a{color:var(--mut);text-decoration:none;padding:6px 10px;border-radius:6px}
+nav a.on{color:var(--pri);background:color-mix(in srgb,var(--pri) 12%,transparent)}
+main{max-width:860px;margin:0 auto;padding:20px 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:18px}
+h1,h2{margin:0 0 12px;font-size:20px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font:inherit}
+button{font:inherit;padding:8px 14px;border-radius:6px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+button.pri{background:var(--pri);color:var(--pri-tx);border-color:var(--pri)}
+button.dan{color:var(--dan);border-color:var(--dan)}
+.row{display:flex;gap:8px;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+th{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.badge{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--bd)}
+.msg{color:var(--dan);font-size:13px;min-height:18px;margin-top:8px}
+.hint{color:var(--mut);font-size:13px;margin-top:14px}
+dl{display:grid;grid-template-columns:130px 1fr;gap:8px 12px;margin:0}
+dt{color:var(--mut)}dd{margin:0}
+ul.ak{margin:6px 0 0;padding-left:20px}
+dialog{border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);width:min(420px,92vw);padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+</style>
+</head>
+<body>
+<header>
+  <b>CRUD User · PBO</b>
+  <nav id="nav"></nav>
+</header>
+<main id="app"></main>
+
+<dialog id="dlgForm"><form id="frm" method="dialog">
+  <h2 id="dlgTitle">Tambah User</h2>
+  <label>Role (kelas)</label><select id="fRole"><option>Admin</option><option>Dosen</option><option>Mahasiswa</option></select>
+  <label>Nama</label><input id="fNama" required>
+  <label>Email</label><input id="fEmail" type="email" required>
+  <label>Password</label><input id="fPass" required>
+  <label id="fExtraL">Info</label><input id="fExtra" required>
+  <div class="msg" id="fMsg"></div>
+  <div class="acts"><button type="button" id="fBatal">Batal</button><button class="pri" type="submit">Simpan</button></div>
+</form></dialog>
+
+<dialog id="dlgDel">
+  <p id="delTxt"></p>
+  <div class="acts"><button id="delNo">Batal</button><button class="dan" id="delYes">Hapus</button></div>
+</dialog>
+
+<script>
+/* =========================================================
+   1. PEWARISAN (Inheritance)
+   User = kelas induk. Admin, Dosen, Mahasiswa = kelas turunan.
+   ========================================================= */
+class User {
+  constructor({ id, nama, email, password, extra = '' }) {
+    this.id = id; this.nama = nama; this.email = email;
+    this.password = password; this.extra = extra;
+  }
+  // Method yang akan di-override oleh kelas turunan (polimorfisme)
+  get role()       { return 'User'; }
+  get extraLabel() { return 'Info'; }
+  get akses()      { return ['Melihat profil sendiri']; }
+  canManage()      { return false; }
+  describe()       { return `${this.nama} (${this.role})`; }
+  toJSON() {
+    return { id: this.id, nama: this.nama, email: this.email,
+             password: this.password, role: this.role, extra: this.extra };
+  }
+}
+
+class Admin extends User {
+  get role()       { return 'Admin'; }
+  get extraLabel() { return 'Kode Staf'; }
+  get akses()      { return [...super.akses, 'Melihat daftar user', 'Tambah user', 'Edit user', 'Hapus user']; }
+  canManage()      { return true; }
+}
+
+class Dosen extends User {
+  get role()       { return 'Dosen'; }
+  get extraLabel() { return 'NIDN'; }
+  get akses()      { return [...super.akses, 'Melihat daftar user', 'Input nilai']; }
+}
+
+class Mahasiswa extends User {
+  get role()       { return 'Mahasiswa'; }
+  get extraLabel() { return 'NIM'; }
+  get akses()      { return [...super.akses, 'Melihat daftar user']; }
+}
+
+/* Factory: membuat objek sesuai role dari data mentah */
+const KELAS = { Admin, Dosen, Mahasiswa };
+const buatUser = (d) => new (KELAS[d.role] || User)(d);
+
+/* =========================================================
+   2. Repository: CRUD ke localStorage (dataset)
+   ========================================================= */
+class UserRepository {
+  constructor(key = 'pbo_users') { this.key = key; this.#seed(); }
+  #seed() {
+    if (this.#raw().length) return;
+    this.#save([
+      { id: 1, nama: 'Satrio Admin', email: 'admin@kampus.id', password: 'admin123', role: 'Admin', extra: 'ADM-001' },
+      { id: 2, nama: 'Dr. Budi Santoso', email: 'budi@kampus.id', password: 'dosen123', role: 'Dosen', extra: '0412058801' },
+      { id: 3, nama: 'Siti Rahma', email: 'siti@kampus.id', password: 'mhs123', role: 'Mahasiswa', extra: '2210511001' }
+    ]);
+  }
+  #raw()  { try { return JSON.parse(localStorage.getItem(this.key)) || []; } catch { return []; } }
+  #save(a){ try { localStorage.setItem(this.key, JSON.stringify(a)); } catch {} }
+  all()        { return this.#raw().map(buatUser); }           // READ (semua)
+  find(id)     { return this.all().find(u => u.id === id); }   // READ (satu)
+  byEmail(e)   { return this.all().find(u => u.email.toLowerCase() === e.toLowerCase()); }
+  add(u)       { const a = this.#raw(); u.id = a.reduce((m, x) => Math.max(m, x.id), 0) + 1; a.push(u.toJSON()); this.#save(a); } // CREATE
+  update(u)    { this.#save(this.#raw().map(x => x.id === u.id ? u.toJSON() : x)); }  // UPDATE
+  remove(id)   { this.#save(this.#raw().filter(x => x.id !== id)); }                  // DELETE
+}
+
+/* Auth: sesi login disimpan di localStorage */
+class Auth {
+  static get() { try { return repo.find(Number(localStorage.getItem('pbo_session'))) || null; } catch { return null; } }
+  static login(email, pass) {
+    const u = repo.byEmail(email);
+    if (!u || u.password !== pass) return null;
+    try { localStorage.setItem('pbo_session', u.id); } catch {}
+    return u;
+  }
+  static logout() { try { localStorage.removeItem('pbo_session'); } catch {} }
+}
+
+/* =========================================================
+   3. UI (3 halaman: login, users, profile) via hash routing
+   ========================================================= */
+const repo = new UserRepository();
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function route() {
+  const me = Auth.get();
+  let page = location.hash.slice(1) || 'login';
+  if (!me) page = 'login';
+  else if (page === 'login') page = 'users';
+  if (location.hash.slice(1) !== page) { location.hash = page; return; }
+  renderNav(me, page);
+  ({ login: viewLogin, users: viewUsers, profile: viewProfile }[page] || viewLogin)(me);
+}
+
+function renderNav(me, page) {
+  $('#nav').innerHTML = me
+    ? `<a href="#users" class="${page==='users'?'on':''}">Daftar User</a>
+       <a href="#profile" class="${page==='profile'?'on':''}">Profile</a>
+       <a href="#login" id="lo">Keluar</a>`
+    : '';
+  const lo = $('#lo'); if (lo) lo.onclick = () => Auth.logout();
+}
+
+/* ---- Halaman 1: Login ---- */
+function viewLogin() {
+  $('#app').innerHTML = `
+  <div class="card" style="max-width:380px;margin:40px auto">
+    <h1>Login</h1>
+    <label>Email</label><input id="lEmail" type="email" value="admin@kampus.id">
+    <label>Password</label><input id="lPass" type="password" value="admin123">
+    <div class="msg" id="lMsg"></div>
+    <button class="pri" id="lBtn" style="width:100%;margin-top:8px">Masuk</button>
+    <p class="hint">Akun demo: admin@kampus.id / admin123 · budi@kampus.id / dosen123 · siti@kampus.id / mhs123</p>
+  </div>`;
+  const go = () => {
+    const u = Auth.login($('#lEmail').value.trim(), $('#lPass').value);
+    if (!u) { $('#lMsg').textContent = 'Email atau password salah.'; return; }
+    location.hash = 'users'; route();
+  };
+  $('#lBtn').onclick = go;
+  $('#lPass').onkeydown = (e) => { if (e.key === 'Enter') go(); };
+}
+
+/* ---- Halaman 2: Tabel Daftar User (CRUD) ---- */
+function viewUsers(me) {
+  const list = repo.all();
+  const boleh = me.canManage();              // POLIMORFISME: hasil beda tiap kelas
+  const rows = list.map(u => `<tr>
+      <td>${u.id}</td><td>${esc(u.nama)}</td><td>${esc(u.email)}</td>
+      <td><span class="badge">${u.role}</span></td>
+      <td>${u.extraLabel}: ${esc(u.extra)}</td>
+      ${boleh ? `<td><button data-e="${u.id}">Edit</button> <button class="dan" data-d="${u.id}">Hapus</button></td>` : ''}
+    </tr>`).join('');
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="row"><h1 style="margin:0">Daftar User</h1>
+      ${boleh ? '<button class="pri" id="add">+ Tambah User</button>' : '<span class="hint" style="margin:0">Mode lihat saja ('+me.role+')</span>'}
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>ID</th><th>Nama</th><th>Email</th><th>Role</th><th>Info</th>${boleh?'<th>Aksi</th>':''}</tr></thead>
+      <tbody>${rows}</tbody></table></div>
+  </div>`;
+  if (!boleh) return;
+  $('#add').onclick = () => openForm();
+  document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => openForm(repo.find(+b.dataset.e)));
+  document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => konfirmasiHapus(repo.find(+b.dataset.d), me));
+}
+
+/* Form tambah/edit */
+let editing = null;
+function syncExtraLabel() {
+  const proto = buatUser({ role: $('#fRole').value });
+  $('#fExtraL').textContent = proto.extraLabel;   // POLIMORFISME: label beda per kelas
+}
+function openForm(u = null) {
+  editing = u;
+  $('#dlgTitle').textContent = u ? 'Edit User' : 'Tambah User';
+  $('#fRole').value = u ? u.role : 'Mahasiswa';
+  $('#fNama').value = u ? u.nama : '';
+  $('#fEmail').value = u ? u.email : '';
+  $('#fPass').value = u ? u.password : '';
+  $('#fExtra').value = u ? u.extra : '';
+  $('#fMsg').textContent = '';
+  syncExtraLabel();
+  $('#dlgForm').showModal();
+}
+$('#fRole').onchange = syncExtraLabel;
+$('#fBatal').onclick = () => $('#dlgForm').close();
+$('#frm').onsubmit = (e) => {
+  e.preventDefault();
+  const data = { id: editing?.id, nama: $('#fNama').value.trim(), email: $('#fEmail').value.trim(),
+                 password: $('#fPass').value, role: $('#fRole').value, extra: $('#fExtra').value.trim() };
+  const dup = repo.byEmail(data.email);
+  if (dup && dup.id !== data.id) { $('#fMsg').textContent = 'Email sudah dipakai.'; return; }
+  const u = buatUser(data);                 // objek dibuat dari kelas sesuai role
+  editing ? repo.update(u) : repo.add(u);
+  $('#dlgForm').close(); route();
+};
+
+let delTarget = null;
+function konfirmasiHapus(u, me) {
+  if (u.id === me.id) { alert('Tidak bisa menghapus akun yang sedang login.'); return; }
+  delTarget = u;
+  $('#delTxt').textContent = `Hapus ${u.describe()}?`;
+  $('#dlgDel').showModal();
+}
+$('#delNo').onclick = () => $('#dlgDel').close();
+$('#delYes').onclick = () => { repo.remove(delTarget.id); $('#dlgDel').close(); route(); };
+
+/* ---- Halaman 3: Profile ---- */
+function viewProfile(me) {
+  $('#app').innerHTML = `
+  <div class="card">
+    <h1>Profile</h1>
+    <dl>
+      <dt>Nama</dt><dd>${esc(me.nama)}</dd>
+      <dt>Email</dt><dd>${esc(me.email)}</dd>
+      <dt>Role</dt><dd><span class="badge">${me.role}</span></dd>
+      <dt>${me.extraLabel}</dt><dd>${esc(me.extra)}</dd>
+      <dt>Hak akses</dt><dd><ul class="ak">${me.akses.map(a => `<li>${a}</li>`).join('')}</ul></dd>
+    </dl>
+    <hr style="border:0;border-top:1px solid var(--bd);margin:18px 0">
+    <h2>Ubah data saya</h2>
+    <label>Nama</label><input id="pNama" value="${esc(me.nama)}">
+    <label>Password baru (kosongkan jika tidak diganti)</label><input id="pPass" type="password">
+    <div class="msg" id="pMsg" style="color:var(--ok)"></div>
+    <button class="pri" id="pSave" style="margin-top:8px">Simpan</button>
+  </div>`;
+  $('#pSave').onclick = () => {
+    const n = $('#pNama').value.trim(); if (!n) return;
+    me.nama = n; if ($('#pPass').value) me.password = $('#pPass').value;
+    repo.update(me);
+    $('#pMsg').textContent = 'Profile diperbarui.';
+  };
+}
+
+window.addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>
